@@ -64,12 +64,9 @@ where
     fn next(&mut self) -> Option<Self::Item> {
         self.0.next().and_then(|r| {
             // TODO: Hacky
-            if r.is_ok() {
-                let next = LineReader::new(r.unwrap()).next();
-                next.map(|x| Ok(x.unwrap()))
-            } else {
-                let res = Err(r.err().unwrap());
-                Some(res)
+            match r {
+                Ok(line) => LineReader::new(line).next().map(|x| Ok(x.unwrap())),
+                Err(e) => Some(Err(e)),
             }
         })
     }
