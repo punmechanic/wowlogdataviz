@@ -12,6 +12,27 @@ fn do_file(r: impl std::io::Read, w: impl std::io::Write) -> std::io::Result<()>
     todo!()
 }
 
+/// When returned, indicates that the given line opened more square braces than it closed, or closed more than it opened
+///
+/// This indicates a log line is malformed or split across multiple lines, which is not valid in WoW combat logs.
+#[derive(Debug, PartialEq)]
+enum ReadLineError {
+    MalformedLine,
+    StackOverflow,
+}
+
+impl From<ReadLineError> for io::Error {
+    fn from(val: ReadLineError) -> Self {
+        io::Error::new(
+            io::ErrorKind::InvalidData,
+            match val {
+                ReadLineError::MalformedLine => "malformed line",
+                ReadLineError::StackOverflow => "stack overflow",
+            },
+        )
+    }
+}
+
 struct LogReader<R> {
     r: R,
 }
@@ -52,15 +73,6 @@ where
             }
         })
     }
-}
-
-/// When returned, indicates that the given line opened more square braces than it closed, or closed more than it opened
-///
-/// This indicates a log line is malformed or split across multiple lines, which is not valid in WoW combat logs.
-#[derive(Debug, PartialEq)]
-enum ReadLineError {
-    MalformedLine,
-    StackOverflow,
 }
 
 struct LineReader {
@@ -182,7 +194,7 @@ mod tests {
         let doc = "foo,bar,[";
         let mut iter = LineReader::new(doc.into());
         let res = iter.next().unwrap();
-        assert_eq!(Err(ReadLineError::MalformedLine), res);
+        assert_eq!(res, Err(ReadLineError::MalformedLine));
     }
 
     #[test]
