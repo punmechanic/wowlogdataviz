@@ -70,6 +70,7 @@ struct LineReader {
     // It's unlikely Blizzard will ever go over 255 chars
     stack: u8,
     pos: usize,
+    last_was_whitespace: bool,
 }
 
 impl LineReader {
@@ -78,6 +79,7 @@ impl LineReader {
             source,
             stack: 0,
             pos: 0,
+            last_was_whitespace: false,
         }
     }
 
@@ -106,13 +108,19 @@ impl LineReader {
                     return Err(ReadLineError::MalformedLine);
                 }
                 self.stack -= 1;
-
                 continue;
             }
 
-            if char == ',' && self.stack == 0 {
+            if char == ' ' && !self.last_was_whitespace {
+                self.last_was_whitespace = true;
+                continue;
+            }
+
+            if (char == ' ' && self.last_was_whitespace || char == ',') && self.stack == 0 {
                 // Nothing on the stack, so we can yield
-                return Ok(Some(slice[0..idx].to_string()));
+                self.last_was_whitespace = false;
+                let next = slice[0..idx].trim();
+                return Ok(Some(next.to_string()));
             }
         }
 
