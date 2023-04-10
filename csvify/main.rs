@@ -71,6 +71,7 @@ struct LineReader {
     stack: u8,
     pos: usize,
     last_was_whitespace: bool,
+    in_quotes: bool,
 }
 
 impl LineReader {
@@ -80,6 +81,7 @@ impl LineReader {
             stack: 0,
             pos: 0,
             last_was_whitespace: false,
+            in_quotes: false,
         }
     }
 
@@ -93,6 +95,7 @@ impl LineReader {
 
         for (idx, char) in slice.char_indices() {
             self.pos += 1;
+
             if char == '[' {
                 if self.stack == u8::MAX {
                     return Err(ReadLineError::StackOverflow);
@@ -116,7 +119,15 @@ impl LineReader {
                 continue;
             }
 
-            if (char == ' ' && self.last_was_whitespace || char == ',') && self.stack == 0 {
+            if char == '"' {
+                self.in_quotes = !self.in_quotes
+            }
+
+            // double-whitespace will count and a comma both count as cell terminators for as long as self.stack is greater than 0, and we are not within quotation marks.
+            if (char == ' ' && self.last_was_whitespace || char == ',')
+                && self.stack == 0
+                && !self.in_quotes
+            {
                 // Nothing on the stack, so we can yield
                 self.last_was_whitespace = false;
                 let next = slice[0..idx].trim();
