@@ -2,7 +2,6 @@ use std::{
     fs::File,
     io,
     io::{stdout, BufRead, BufReader},
-    process::exit,
 };
 
 fn do_file(r: impl std::io::Read, w: impl std::io::Write) -> std::io::Result<()> {
@@ -14,11 +13,7 @@ fn do_file(r: impl std::io::Read, w: impl std::io::Write) -> std::io::Result<()>
     todo!()
 }
 
-struct LogReader<R>(R)
-where
-    R: io::Read;
-
-struct Lines;
+struct LogReader<R>(R);
 
 impl<R> LogReader<R>
 where
@@ -33,11 +28,58 @@ where
     }
 }
 
+struct Lines;
+
 impl Iterator for Lines {
-    type Item = Result<String, io::Error>;
+    type Item = Result<Vec<String>, io::Error>;
 
     fn next(&mut self) -> Option<Self::Item> {
         todo!()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{io::Read, io::Result, slice::Iter};
+
+    pub struct StringReader<'a> {
+        iter: Iter<'a, u8>,
+    }
+
+    impl<'a> StringReader<'a> {
+        /// Wrap a string in a `StringReader`, which implements `std::io::Read`.
+        pub fn new(data: &'a str) -> Self {
+            Self {
+                iter: data.as_bytes().iter(),
+            }
+        }
+    }
+
+    impl<'a> Read for StringReader<'a> {
+        fn read(&mut self, buf: &mut [u8]) -> Result<usize> {
+            for i in 0..buf.len() {
+                if let Some(x) = self.iter.next() {
+                    buf[i] = *x;
+                } else {
+                    return Ok(i);
+                }
+            }
+            Ok(buf.len())
+        }
+    }
+
+    #[test]
+    fn can_read_log_line_correctly() {
+        let doc = "4/5 16:34:03.029  COMBAT_LOG_VERSION,20,ADVANCED_LOG_ENABLED,1,BUILD_VERSION,10.0.7,PROJECT_ID,1";
+        let r = StringReader::new(doc);
+        let r = super::LogReader::new(r);
+        let mut iter = r.lines();
+        let res = iter
+            .next()
+            .expect("had no line")
+            .expect("could not read line");
+
+        assert!(iter.next().is_none());
     }
 }
 
@@ -48,9 +90,9 @@ fn count_max_columns(r: impl std::io::Read) -> io::Result<usize> {
             // There's one extra column because the first column will be both timestamp and event.
             // TODO: I expect this could be much faster if we counted the incidences of , in the string rather than splitting it.
             let line = line?;
-            let n = line.split(',').count() + 1;
+            let n = line.len() + 1;
             if n > 400 {
-                println!("{}", line);
+                println!("{:?}", line);
             }
 
             Ok(if prev > n { prev } else { n })
