@@ -1,7 +1,6 @@
 use std::{
     fs::File,
-    io,
-    io::{stdout, BufRead, BufReader},
+    io::{self, stdout, BufRead, BufReader},
 };
 
 fn do_file(r: impl std::io::Read, w: impl std::io::Write) -> std::io::Result<()> {
@@ -13,27 +12,36 @@ fn do_file(r: impl std::io::Read, w: impl std::io::Write) -> std::io::Result<()>
     todo!()
 }
 
-struct LogReader<R>(R);
+struct LogReader<R> {
+    r: R,
+}
 
 impl<R> LogReader<R>
 where
     R: io::Read,
 {
-    fn new(reader: R) -> Self {
-        todo!();
+    fn new(r: R) -> Self {
+        Self { r }
     }
 
-    fn lines(&self) -> Lines {
-        todo!();
+    fn lines(self) -> Lines<impl Iterator<Item = io::Result<String>>> {
+        let buf = BufReader::new(self.r);
+        Lines(buf.lines())
     }
 }
 
-struct Lines;
+struct Lines<I>(I)
+where
+    I: Iterator<Item = io::Result<String>>;
 
-impl Iterator for Lines {
+impl<I> Iterator for Lines<I>
+where
+    I: Iterator<Item = io::Result<String>>,
+{
     type Item = Result<Vec<String>, io::Error>;
 
     fn next(&mut self) -> Option<Self::Item> {
+        println!("next");
         todo!()
     }
 }
@@ -79,6 +87,19 @@ mod tests {
             .expect("had no line")
             .expect("could not read line");
 
+        let expected = vec![
+            "4/5 16:34:03.029",
+            "COMBAT_LOG_VERSION",
+            "20",
+            "ADVANCED_LOG_ENABLED",
+            "1",
+            "BUILD_VERSION",
+            "10.0.7",
+            "PROJECT_ID",
+            "1",
+        ];
+
+        assert_eq!(res, expected);
         assert!(iter.next().is_none());
     }
 }
