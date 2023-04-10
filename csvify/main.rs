@@ -103,7 +103,32 @@ mod tests {
     }
 
     #[test]
-    fn can_read_log_line_correctly() {
+    fn line_reader_can_read_log_line_correctly() {
+        let doc = "4/5 16:34:03.029  COMBAT_LOG_VERSION,20,ADVANCED_LOG_ENABLED,1,BUILD_VERSION,10.0.7,PROJECT_ID,1";
+        let mut iter = super::LineReader::new(doc.into());
+        let res = iter
+            .next()
+            .expect("had no line")
+            .expect("could not read line");
+
+        let expected = vec![
+            "4/5 16:34:03.029",
+            "COMBAT_LOG_VERSION",
+            "20",
+            "ADVANCED_LOG_ENABLED",
+            "1",
+            "BUILD_VERSION",
+            "10.0.7",
+            "PROJECT_ID",
+            "1",
+        ];
+
+        assert_eq!(res, expected);
+        assert!(iter.next().is_none());
+    }
+
+    #[test]
+    fn log_reader_can_read_log_line_correctly() {
         let doc = "4/5 16:34:03.029  COMBAT_LOG_VERSION,20,ADVANCED_LOG_ENABLED,1,BUILD_VERSION,10.0.7,PROJECT_ID,1";
         let r = StringReader::new(doc);
         let r = super::LogReader::new(r);
