@@ -1,16 +1,8 @@
 use std::{
     fs::File,
-    io::{self, stdout, BufRead, BufReader, Read},
+    io::{self, stdout, BufRead, BufReader},
+    process::exit,
 };
-
-fn do_file(r: impl std::io::Read, w: impl std::io::Write) -> std::io::Result<()> {
-    let bufr = BufReader::new(r);
-    for line in bufr.lines() {
-        println!("{}", line?);
-    }
-
-    todo!()
-}
 
 /// When returned, indicates that the given line opened more square braces than it closed, or closed more than it opened
 ///
@@ -281,26 +273,62 @@ fn count_max_columns(r: impl std::io::Read) -> io::Result<usize> {
         })
 }
 
+fn count_many_max_columns(rs: impl Iterator<Item = String>) -> io::Result<usize> {
+    rs.map(File::open).try_fold(0, |prev, file| {
+        let n = count_max_columns(file?)?;
+        Ok(if prev > n { prev } else { n })
+    })
+}
+
+fn filenames() -> impl Iterator<Item = String> {
+    std::env::args().skip(1)
+}
+
+fn pad_columns(r: impl std::io::Read, w: impl std::io::Write, n: usize) -> std::io::Result<()> {
+    let bufr = BufReader::new(r);
+    let r = LogReader::new(bufr);
+    let w = PaddedCsvWriter::new(w, n);
+    for line in r.lines() {
+        w.write(line?)?;
+    }
+
+    todo!()
+}
+
+struct PaddedCsvWriter<W>(W, usize)
+where
+    W: io::Write;
+
+impl<W> PaddedCsvWriter<W>
+where
+    W: io::Write,
+{
+    fn new(w: W, count: usize) -> Self {
+        return Self(w, count);
+    }
+
+    fn write(&self, line: Vec<String>) -> io::Result<()> {
+        todo!()
+    }
+}
+
 fn main() {
-    let out = stdout();
-    let args = std::env::args().skip(1);
     // Open files once to count the maximum number of columns; This is used to pad column count.
-    let max_columns: std::io::Result<usize> =
-        std::env::args()
-            .skip(1)
-            .map(File::open)
-            .try_fold(0, |prev, file| {
-                let n = count_max_columns(file?)?;
-                Ok(if prev > n { prev } else { n })
-            });
+    let max_columns = match count_many_max_columns(filenames()) {
+        Ok(n) => n,
+        Err(e) => {
+            eprintln!("could not process: {}", e);
+            exit(e.raw_os_error().unwrap_or(-1));
+        }
+    };
 
-    println!("max columns: {:?}", max_columns);
-
-    // for name in args {
-    //     if let Err(error) = File::open(&name).and_then(|mut handle| do_file(&mut handle, &out)) {
-    //         eprintln!("could not process {}: {}", name, error);
-    //         exit(error.raw_os_error().unwrap_or(-1));
-    //     }
-    // }
-    // Open them again to write out the CSV in the correct format with the correct number of columns.
+    // Now we do it again, but we output lines padded to equal the maximum column length.
+    // This lets us use the files in things like Excel.
+    let out = stdout();
+    for name in filenames() {
+        if let Err(error) = File::open(&name).map(|handle| pad_columns(handle, &out, max_columns)) {
+            eprintln!("could not process {}: {}", name, error);
+            exit(error.raw_os_error().unwrap_or(-1));
+        }
+    }
 }
