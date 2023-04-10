@@ -38,10 +38,36 @@ impl<I> Iterator for Lines<I>
 where
     I: Iterator<Item = io::Result<String>>,
 {
-    type Item = Result<Vec<String>, io::Error>;
+    type Item = io::Result<Vec<String>>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        println!("next");
+        self.0.next().and_then(|r| {
+            // TODO: Hacky
+            if r.is_err() {
+                let res = Err(r.err().unwrap());
+                Some(res)
+            } else {
+                LineReader::new(r.unwrap()).next()
+            }
+        })
+    }
+}
+
+struct LineReader {
+    source: String,
+}
+
+impl LineReader {
+    fn new(source: String) -> Self {
+        Self { source }
+    }
+}
+
+impl Iterator for LineReader {
+    type Item = io::Result<Vec<String>>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        println!("{}", self.source);
         todo!()
     }
 }
