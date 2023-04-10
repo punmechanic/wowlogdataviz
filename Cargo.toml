@@ -10,3 +10,6 @@ edition = "2021"
 [[bin]]
 name = "csvify"
 path = "csvify/main.rs"
+
+[profile.release]
+debug = true

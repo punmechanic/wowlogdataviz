@@ -1,6 +1,6 @@
 use std::{
     fs::File,
-    io::{self, stdout, BufRead, BufReader},
+    io::{self, stdout, BufRead, BufReader, Read},
 };
 
 fn do_file(r: impl std::io::Read, w: impl std::io::Write) -> std::io::Result<()> {
@@ -58,10 +58,15 @@ where
 ///
 /// This indicates a log line is malformed or split across multiple lines, which is not valid in WoW combat logs.
 #[derive(Debug, PartialEq)]
-struct MalformedLineError;
+enum ReadLineError {
+    MalformedLine,
+    StackOverflow,
+}
+
 struct LineReader {
     source: String,
-    stack: Vec<(usize, char)>,
+    // It's unlikely Blizzard will ever go over 255 chars
+    stack: u8,
     pos: usize,
 }
 
@@ -69,12 +74,12 @@ impl LineReader {
     fn new(source: String) -> Self {
         Self {
             source,
-            stack: Vec::new(),
+            stack: 0,
             pos: 0,
         }
     }
 
-    fn next_cell(&mut self) -> Result<Option<String>, MalformedLineError> {
+    fn next_cell(&mut self) -> Result<Option<String>, ReadLineError> {
         // We read until the next comma
         let slice = &self.source[self.pos..];
         if slice.is_empty() {
@@ -85,36 +90,41 @@ impl LineReader {
         for (idx, char) in slice.char_indices() {
             self.pos += 1;
             if char == '[' {
-                self.stack.push((idx, char));
+                if self.stack == u8::MAX {
+                    return Err(ReadLineError::StackOverflow);
+                }
+
+                self.stack += 1;
                 continue;
             }
 
             if char == ']' {
-                if self.stack.pop() == None {
+                if self.stack == 0 {
                     // Tried to pop from the stack when nothing was on there - indicates a malformed result
-                    return Err(MalformedLineError);
+                    return Err(ReadLineError::MalformedLine);
                 }
+                self.stack -= 1;
 
                 continue;
             }
 
-            if char == ',' && self.stack.is_empty() {
+            if char == ',' && self.stack == 0 {
                 // Nothing on the stack, so we can yield
                 return Ok(Some(slice[0..idx].to_string()));
             }
         }
 
-        if self.stack.is_empty() {
+        if self.stack == 0 {
             Ok(Some(slice.to_string()))
         } else {
             // The stack is not empty which means something was not terminated and the line was incomplete
-            Err(MalformedLineError)
+            Err(ReadLineError::MalformedLine)
         }
     }
 }
 
 impl Iterator for LineReader {
-    type Item = Result<Vec<String>, MalformedLineError>;
+    type Item = Result<Vec<String>, ReadLineError>;
 
     fn next(&mut self) -> Option<Self::Item> {
         let mut line = Vec::new();
@@ -137,9 +147,8 @@ impl Iterator for LineReader {
 
 #[cfg(test)]
 mod tests {
-    use crate::MalformedLineError;
-
     use super::LineReader;
+    use crate::ReadLineError;
     use std::{io::Read, io::Result, slice::Iter};
 
     pub struct StringReader<'a> {
@@ -173,7 +182,7 @@ mod tests {
         let doc = "foo,bar,[";
         let mut iter = LineReader::new(doc.into());
         let res = iter.next().unwrap();
-        assert_eq!(Err(MalformedLineError), res);
+        assert_eq!(Err(ReadLineError::MalformedLine), res);
     }
 
     #[test]
@@ -275,7 +284,7 @@ fn main() {
                 Ok(if prev > n { prev } else { n })
             });
 
-    println!("max cols: {:?}", max_columns);
+    println!("max columns: {:?}", max_columns);
 
     // for name in args {
     //     if let Err(error) = File::open(&name).and_then(|mut handle| do_file(&mut handle, &out)) {
@@ -284,6 +293,4 @@ fn main() {
     //     }
     // }
     // Open them again to write out the CSV in the correct format with the correct number of columns.
-
-    println!("Hello, world!");
 }
