@@ -94,6 +94,8 @@ impl LineReader {
         }
 
         for (idx, char) in slice.char_indices() {
+            // While WoW uses [ and ] as a way of prevent commas in context from being read as rows, this is not in the CSV spec.
+            // We can solve this by encapsulating cells within quotation marks.
             self.pos += 1;
 
             if char == '[' {
