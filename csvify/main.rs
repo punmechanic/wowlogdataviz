@@ -287,12 +287,12 @@ fn filenames() -> impl Iterator<Item = String> {
 fn pad_columns(r: impl std::io::Read, w: impl std::io::Write, n: usize) -> std::io::Result<()> {
     let bufr = BufReader::new(r);
     let r = LogReader::new(bufr);
-    let w = PaddedCsvWriter::new(w, n);
+    let mut w = PaddedCsvWriter::new(w, n);
     for line in r.lines() {
         w.write(line?)?;
     }
 
-    todo!()
+    Ok(())
 }
 
 struct PaddedCsvWriter<W>(W, usize)
@@ -304,11 +304,16 @@ where
     W: io::Write,
 {
     fn new(w: W, count: usize) -> Self {
-        return Self(w, count);
+        Self(w, count)
     }
 
-    fn write(&self, line: Vec<String>) -> io::Result<()> {
-        todo!()
+    fn write(&mut self, cells: Vec<String>) -> io::Result<()> {
+        let mut output = cells.join(",");
+        output.extend((cells.len()..self.1).map(|_| ","));
+        let bytes = output.as_bytes();
+        self.0.write_all(bytes)?;
+        self.0.write_all(b"\n")?;
+        Ok(())
     }
 }
 
