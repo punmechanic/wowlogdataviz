@@ -62,13 +62,14 @@ where
     type Item = io::Result<Vec<String>>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.0.next().and_then(|r| {
-            // TODO: Hacky
-            match r {
-                Ok(line) => LineReader::new(line).next().map(|x| Ok(x.unwrap())),
+        if let Some(line) = self.0.next() {
+            match line {
+                Ok(line) => LineReader::new(line).next().map(|x| x.unwrap()).map(Ok),
                 Err(e) => Some(Err(e)),
             }
-        })
+        } else {
+            None
+        }
     }
 }
 
