@@ -314,7 +314,8 @@ mod tests {
             .expect("could not read line");
 
         let expected = vec![
-            "4/5 18:51:38.090  COMBATANT_INFO",
+            "4/5 18:51:38.090",
+            "COMBATANT_INFO",
             "Player-57-0CF2A300",
             "0",
             "1215",
