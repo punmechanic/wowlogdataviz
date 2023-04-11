@@ -252,8 +252,23 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::LineReader;
-    use crate::ReadLineError;
+    use crate::{PaddedCsvWriter, ReadLineError};
     use std::{io::Read, io::Result, slice::Iter};
+
+    #[test]
+    fn padded_csv_writer_escapes_commas() {
+        let mut buf = Vec::with_capacity(1024);
+        let input = vec![
+            "a".to_owned(),
+            "b".to_owned(),
+            "\"foo, bar, baz\"".to_owned(),
+            "c".to_owned(),
+        ];
+
+        let mut writer = PaddedCsvWriter::new(&mut buf, 4);
+        writer.write(input).unwrap();
+        assert_eq!(buf, b"a,b,\"foo, bar, baz\",c\n");
+    }
 
     pub struct StringReader<'a> {
         iter: Iter<'a, u8>,
