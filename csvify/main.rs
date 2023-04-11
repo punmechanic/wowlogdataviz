@@ -168,6 +168,87 @@ impl Iterator for LineReader {
     }
 }
 
+fn count_max_columns(r: impl std::io::Read) -> io::Result<usize> {
+    LogReader::new(BufReader::new(r))
+        .lines()
+        .try_fold(0, |prev, line| {
+            // There's one extra column because the first column will be both timestamp and event.
+            // TODO: I expect this could be much faster if we counted the incidences of , in the string rather than splitting it.
+            let line = line?;
+            let n = line.len() + 1;
+            if n > 400 {
+                println!("{:?}", line);
+            }
+
+            Ok(if prev > n { prev } else { n })
+        })
+}
+
+fn count_many_max_columns(rs: impl Iterator<Item = String>) -> io::Result<usize> {
+    rs.map(File::open).try_fold(0, |prev, file| {
+        let n = count_max_columns(file?)?;
+        Ok(if prev > n { prev } else { n })
+    })
+}
+
+fn filenames() -> impl Iterator<Item = String> {
+    std::env::args().skip(1)
+}
+
+fn pad_columns(r: impl std::io::Read, w: impl std::io::Write, n: usize) -> std::io::Result<()> {
+    let bufr = BufReader::new(r);
+    let r = LogReader::new(bufr);
+    let mut w = PaddedCsvWriter::new(w, n);
+    for line in r.lines() {
+        w.write(line?)?;
+    }
+
+    Ok(())
+}
+
+struct PaddedCsvWriter<W>(W, usize)
+where
+    W: io::Write;
+
+impl<W> PaddedCsvWriter<W>
+where
+    W: io::Write,
+{
+    fn new(w: W, count: usize) -> Self {
+        Self(w, count)
+    }
+
+    fn write(&mut self, cells: Vec<String>) -> io::Result<()> {
+        let mut output = cells.join(",");
+        output.extend((cells.len()..self.1).map(|_| ","));
+        let bytes = output.as_bytes();
+        self.0.write_all(bytes)?;
+        self.0.write_all(b"\n")?;
+        Ok(())
+    }
+}
+
+fn main() {
+    // Open files once to count the maximum number of columns; This is used to pad column count.
+    let max_columns = match count_many_max_columns(filenames()) {
+        Ok(n) => n,
+        Err(e) => {
+            eprintln!("could not process: {}", e);
+            exit(e.raw_os_error().unwrap_or(-1));
+        }
+    };
+
+    // Now we do it again, but we output lines padded to equal the maximum column length.
+    // This lets us use the files in things like Excel.
+    let out = stdout();
+    for name in filenames() {
+        if let Err(error) = File::open(&name).map(|handle| pad_columns(handle, &out, max_columns)) {
+            eprintln!("could not process {}: {}", name, error);
+            exit(error.raw_os_error().unwrap_or(-1));
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::LineReader;
@@ -275,86 +356,5 @@ mod tests {
 
         assert_eq!(res, expected);
         assert!(iter.next().is_none());
-    }
-}
-
-fn count_max_columns(r: impl std::io::Read) -> io::Result<usize> {
-    LogReader::new(BufReader::new(r))
-        .lines()
-        .try_fold(0, |prev, line| {
-            // There's one extra column because the first column will be both timestamp and event.
-            // TODO: I expect this could be much faster if we counted the incidences of , in the string rather than splitting it.
-            let line = line?;
-            let n = line.len() + 1;
-            if n > 400 {
-                println!("{:?}", line);
-            }
-
-            Ok(if prev > n { prev } else { n })
-        })
-}
-
-fn count_many_max_columns(rs: impl Iterator<Item = String>) -> io::Result<usize> {
-    rs.map(File::open).try_fold(0, |prev, file| {
-        let n = count_max_columns(file?)?;
-        Ok(if prev > n { prev } else { n })
-    })
-}
-
-fn filenames() -> impl Iterator<Item = String> {
-    std::env::args().skip(1)
-}
-
-fn pad_columns(r: impl std::io::Read, w: impl std::io::Write, n: usize) -> std::io::Result<()> {
-    let bufr = BufReader::new(r);
-    let r = LogReader::new(bufr);
-    let mut w = PaddedCsvWriter::new(w, n);
-    for line in r.lines() {
-        w.write(line?)?;
-    }
-
-    Ok(())
-}
-
-struct PaddedCsvWriter<W>(W, usize)
-where
-    W: io::Write;
-
-impl<W> PaddedCsvWriter<W>
-where
-    W: io::Write,
-{
-    fn new(w: W, count: usize) -> Self {
-        Self(w, count)
-    }
-
-    fn write(&mut self, cells: Vec<String>) -> io::Result<()> {
-        let mut output = cells.join(",");
-        output.extend((cells.len()..self.1).map(|_| ","));
-        let bytes = output.as_bytes();
-        self.0.write_all(bytes)?;
-        self.0.write_all(b"\n")?;
-        Ok(())
-    }
-}
-
-fn main() {
-    // Open files once to count the maximum number of columns; This is used to pad column count.
-    let max_columns = match count_many_max_columns(filenames()) {
-        Ok(n) => n,
-        Err(e) => {
-            eprintln!("could not process: {}", e);
-            exit(e.raw_os_error().unwrap_or(-1));
-        }
-    };
-
-    // Now we do it again, but we output lines padded to equal the maximum column length.
-    // This lets us use the files in things like Excel.
-    let out = stdout();
-    for name in filenames() {
-        if let Err(error) = File::open(&name).map(|handle| pad_columns(handle, &out, max_columns)) {
-            eprintln!("could not process {}: {}", name, error);
-            exit(error.raw_os_error().unwrap_or(-1));
-        }
     }
 }
